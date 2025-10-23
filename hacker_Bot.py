@@ -1,7 +1,7 @@
-import win32com.client as wincl # pyright: ignore[reportMissingModuleSource]
+import win32com.client as wincl
 import datetime
-import speech_recognition as sr # pyright: ignore[reportMissingImports]
-import wikipedia # pyright: ignore[reportMissingImports]
+import speech_recognition as sr
+import wikipedia
 import webbrowser
 import os
 import smtplib
