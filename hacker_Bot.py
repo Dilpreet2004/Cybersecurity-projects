@@ -10,6 +10,8 @@ from email.mime.multipart import MIMEMultipart
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import platform
+from dotenv import load_dotenv
+load_dotenv()
 
 speaker = wincl.Dispatch("SAPI.SpVoice")
 speaker.Rate = 3.4
@@ -92,8 +94,8 @@ def sendEmail(to: str, subject: str, body: str):
 def play_spotify_song_by_name(song_name: str, singer_name: str):
     # --- 1. SPOTIFY API CREDENTIALS AND SCOPES ---
     # It is highly recommended to use environment variables for security
-    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "24a9f4c3e59446fca9c49e453ae6b4e7")
-    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "f2939f058424427ca76b962a178c9d12")
+    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID")
+    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET")
     REDIRECT_URI = "http://localhost:8080/callback" # Must match your Spotify App settings
     
     # Scopes needed for playback control
