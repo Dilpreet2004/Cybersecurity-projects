@@ -193,6 +193,105 @@ if __name__ == "__main__":
       codePath = "C:\\Users\\Hp\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"
       os.startfile(codePath)
     
+    elif "open hianime" in query:
+      webbrowser.open("https://hianimes.ro/")
+
+    elif "open netflix" in query:
+      webbrowser.open("https://www.netflix.com/in/")
+    
+    elif "open prime video" in query:
+      webbrowser.open("https://www.primevideo.com/")
+
+    elif "switch to gemini" in query:
+      pass
+    
+    elif "switch to chatgpt" in query:
+      pass
+    
+    elif "switch to deepseek" in query:
+      pass
+    
+    elif "send message to given number on whatsapp" in query:
+      pass
+    
+    elif "List available wifi networks" in query:
+      pass
+
+    elif "check internet speed" in query:
+      pass
+
+    elif "download youtube video" in query:
+      pass
+    
+    elif "tell battery percentage" in query:
+      pass
+
+    elif "scan for vulnerabilities" in query:
+      pass
+
+    elif "perform penetration test" in query:
+      pass
+
+    elif "configure firewall settings" in query:
+      pass
+
+    elif "monitor network traffic" in query:
+      pass
+
+    elif "set up vpn connection" in query:
+      pass
+
+    elif "check for updates" in query:
+      pass
+
+    elif "install security patches" in query:
+      pass
+
+    elif "prepare SIEM reports" in query:
+      pass
+
+    elif "analyze security logs" in query:
+      pass
+
+    elif "tell me a joke" in query:
+      pass
+
+    elif "create a reminder" in query:
+      pass
+
+    elif "set an alarm" in query:
+      pass
+
+    elif "weather report" in query:
+      pass
+
+    elif "news update" in query:
+      pass
+
+    elif "perform brute force attack" in query:
+      pass
+
+    elif "perform sql injection" in query:
+      pass
+
+    elif "perform xss attack" in query:
+      pass
+
+    elif "perform ddos attack" in query:
+      pass
+
+    elif "perform mitm attack" in query:
+      pass
+
+    elif "perform phishing attack" in query:
+      pass
+
+    elif "hack wifi network" in query:
+      pass
+
+    elif "bypass firewall" in query:
+      pass
+
     elif "email to me" in query:
       try:
         speak("What should I say?")
