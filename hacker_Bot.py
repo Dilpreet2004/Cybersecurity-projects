@@ -84,7 +84,7 @@ def sendEmail(to: str, subject: str, body: str):
             print("Email sent successfully!")
 
     except smtplib.SMTPAuthenticationError:
-        print("Authentication Error: Login failed. Did you use a 16-character App Password?")
+        print("Authentication Error: Login failed. Did you use a 8-character App Password?")
     except Exception as e:
         print(f"An error occurred: {e}")
 
@@ -92,8 +92,8 @@ def sendEmail(to: str, subject: str, body: str):
 def play_spotify_song_by_name(song_name: str, singer_name: str):
     # --- 1. SPOTIFY API CREDENTIALS AND SCOPES ---
     # It is highly recommended to use environment variables for security
-    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "24a9f4c3e59446fca9c49e453ae6b4e7")
-    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "f2939f058424427ca76b962a178c9d12")
+    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "<CLIENT_ID>") # replace <CLIENT_ID> with your client ID
+    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "<CLIENT_SECRET>") # replace <CLIENT_SECRET> with your client ID
     REDIRECT_URI = "http://localhost:8080/callback" # Must match your Spotify App settings
     
     # Scopes needed for playback control
