@@ -96,6 +96,8 @@ def play_spotify_song_by_name(song_name: str, singer_name: str):
     # It is highly recommended to use environment variables for security
     CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID")
     CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET")
+    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "<CLIENT_ID>") # replace <CLIENT_ID> with your client ID
+    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "<CLIENT_SECRET>") # replace <CLIENT_SECRET> with your client ID
     REDIRECT_URI = "http://localhost:8080/callback" # Must match your Spotify App settings
     
     # Scopes needed for playback control
