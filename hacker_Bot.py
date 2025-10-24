@@ -202,6 +202,9 @@ if __name__ == "__main__":
     elif "open prime video" in query:
       webbrowser.open("https://www.primevideo.com/")
 
+    elif "open github" in query:
+      webbrowser.open("https://github.com/Dilpreet2004")
+
     elif "switch to gemini" in query:
       pass
     
