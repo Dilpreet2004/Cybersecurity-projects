@@ -9,6 +9,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
+import platform
 
 speaker = wincl.Dispatch("SAPI.SpVoice")
 speaker.Rate = 3.4
@@ -207,8 +208,12 @@ if __name__ == "__main__":
       play_spotify_song_by_name(song_name, singer_name)
     
     elif "shutdown system" in query:
-      os.system("shutdown /s /t 5")
-      print("Shutting down the system in 5 seconds.")
+      if platform.system() == "Windows":
+        os.system("shutdown /s /t 5")
+      elif platform.system() == "Linux":
+        os.system("sudo shutdown -h +5")
+        speak("Enter your password to proceed with shutdown.")
+      speak("Shutting down the system in 5 seconds.")
     
     elif "restart system" in query:
       os.system("shutdown /r /t 5")
