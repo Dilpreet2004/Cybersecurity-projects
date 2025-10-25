@@ -11,10 +11,17 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import platform
 from dotenv import load_dotenv
+import requests
+import json
+import time
+from typing import Optional
 load_dotenv()
 
 speaker = wincl.Dispatch("SAPI.SpVoice")
 speaker.Rate = 3.4
+
+spotify_query = ["play song", "play music", "play spotify", "play another song","play some music","play a song","play the song"]
+talk_query = ["tell","give","what","how","explain","define","describe","who","where","when","why"]
 # Functions for speaking
 def speak(audio):
   speaker.Speak(audio)
@@ -91,7 +98,230 @@ def sendEmail(to: str, subject: str, body: str):
         print(f"An error occurred: {e}")
 
 # Function to play a song on Spotify by name and singer using Spotify API
+def get_spotify_client() -> Optional[spotipy.Spotify]:
+    """Handles Spotify authorization and returns an authenticated Spotify client object."""
+    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "<CLIENT_ID>") # replace <CLIENT_ID> with your client ID
+    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "<CLIENT_SECRET>") # replace <CLIENT_SECRET> with your client ID
+    REDIRECT_URI = "http://localhost:8080/callback" # Must match your Spotify App settings
+    
+    # Scopes needed for playback control and queueing
+    SCOPE = "user-read-playback-state,user-modify-playback-state"
+
+    if not (CLIENT_ID and CLIENT_SECRET and CLIENT_ID != "<CLIENT_ID>"):
+        print("ERROR: Spotify API credentials are missing. Set SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET.")
+        return None
+    
+    try:
+        auth_manager = SpotifyOAuth(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            redirect_uri=REDIRECT_URI,
+            scope=SCOPE,
+            open_browser=True # Opens the browser for login on first run
+        )
+        sp = spotipy.Spotify(auth_manager=auth_manager)
+        return sp
+    except Exception as e:
+        print(f"\nAn error occurred during Spotify client setup: {e}")
+        print("Ensure you have correctly set up the Authorization Code Flow.")
+        return None
+
+# The original play_spotify_song_by_name function is kept unchanged
 def play_spotify_song_by_name(song_name: str, singer_name: str):
+    # ... (function body remains unchanged) ...
+    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID")
+    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET")
+    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "<CLIENT_ID>") # replace <CLIENT_ID> with your client ID
+    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "<CLIENT_SECRET>") # replace <CLIENT_SECRET> with your client ID
+    REDIRECT_URI = "http://localhost:8080/callback" 
+    SCOPE = "user-read-playback-state,user-modify-playback-state"
+
+    if not (CLIENT_ID and CLIENT_SECRET):
+        print("ERROR: Spotify API credentials are missing. Set SPOTIPY_CLIENT_ID and SPOTIPY_CLIENT_SECRET.")
+        return
+
+    print(f"\n--- Spotify Player Controller ---")
+    
+    try:
+        auth_manager = SpotifyOAuth(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            redirect_uri=REDIRECT_URI,
+            scope=SCOPE,
+            open_browser=True
+        )
+        sp = spotipy.Spotify(auth_manager=auth_manager)
+        
+        query = f'track:"{song_name}" artist:"{singer_name}"'
+        results = sp.search(q=query, limit=1, type='track')
+        
+        items = results['tracks']['items']
+        if not items:
+            print(f"\nCould not find a track matching '{song_name}' by '{singer_name}'.")
+            return
+
+        track = items[0]
+        spotify_uri = track['uri']
+        track_name = track['name']
+        artist_name = track['artists'][0]['name']
+
+        print(f"\nFound Track: '{track_name}' by {artist_name}")
+
+        devices = sp.devices()
+        active_device_id = None
+        
+        if devices and devices['devices']:
+            for device in devices['devices']:
+                if device['is_active']:
+                    active_device_id = device['id']
+                    break
+            if not active_device_id:
+                active_device_id = devices['devices'][0]['id']
+
+        if active_device_id:
+            sp.start_playback(device_id=active_device_id, uris=[spotify_uri])
+            print("Playback started successfully.")
+        else:
+            print("WARNING: Could not find an active Spotify device. Please start the Spotify app.")
+            webbrowser.open(spotify_uri)
+
+    except Exception as e:
+        print(f"\nAn error occurred during API or launch: {e}")
+        print("Ensure you have correctly set up the Authorization Code Flow.")
+
+# =====================================================================
+# 2. NEW SPOTIFY CONTROL FUNCTIONS (skip_to_next_song and queue_spotify_track_by_name remain unchanged)
+# =====================================================================
+
+def skip_to_next_song():
+    """Skips the currently playing track to the next one in the queue/playlist."""
+    sp = get_spotify_client()
+    if not sp:
+        return
+
+    print("\n--- Skipping to Next Song ---")
+    try:
+        sp.next_track()
+        print("Successfully skipped to the next song.")
+    except spotipy.SpotifyException as e:
+        if e.http_status == 404:
+            print("Error: No active device found. Please start the Spotify app on a device.")
+        else:
+            print(f"An error occurred while skipping track: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+def queue_spotify_track_by_name(song_name: str, singer_name: str):
+    """Searches for a track and adds it to the Spotify playback queue."""
+    sp = get_spotify_client()
+    if not sp:
+        return
+
+    print(f"\n--- Queueing Track: {song_name} by {singer_name} ---")
+    
+    try:
+        query = f'track:"{song_name}" artist:"{singer_name}"'
+        results = sp.search(q=query, limit=1, type='track')
+        
+        items = results['tracks']['items']
+        if not items:
+            print(f"Could not find a track matching '{song_name}' by '{singer_name}'.")
+            return
+
+        track = items[0]
+        spotify_uri = track['uri']
+        track_name = track['name']
+        artist_name = track['artists'][0]['name']
+
+        # Queues the track on the active device
+        sp.add_to_queue(uri=spotify_uri)
+        print(f"Successfully added '{track_name}' by {artist_name} to the queue.")
+
+    except spotipy.SpotifyException as e:
+        if e.http_status == 404:
+            print("Error: No active device found. Please start the Spotify app on a device.")
+        else:
+            print(f"An error occurred while queueing track: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+def queue_spotify_album_by_name(album_name: str, singer_name: str):
+    """
+    Searches for an album and queues ALL of its tracks one by one.
+    This simulates queueing the whole album using multiple API calls.
+    """
+    sp = get_spotify_client()
+    if not sp:
+        return
+
+    print(f"\n--- Attempting to Queue ALL Tracks of Album: {album_name} by {singer_name} ---")
+
+    try:
+        query = f'album:"{album_name}" artist:"{singer_name}"'
+        results = sp.search(q=query, limit=1, type='album')
+        
+        items = results['albums']['items']
+        if not items:
+            print(f"Could not find an album matching '{album_name}' by '{singer_name}'.")
+            return
+
+        album = items[0]
+        album_id = album['id']
+        album_name_found = album['name']
+        artist_name = album['artists'][0]['name']
+        
+        print(f"Found Album: '{album_name_found}' by {artist_name}")
+
+        queued_count = 0
+        
+        # Paginate through the album's tracks (albums can have > 50 tracks)
+        tracks_results = sp.album_tracks(album_id)
+        tracks_to_queue = tracks_results['items']
+        
+        # The API response structure for album_tracks is different from search
+        while tracks_to_queue:
+            for track in tracks_to_queue:
+                track_uri = track['uri']
+                # Queue the individual track
+                sp.add_to_queue(uri=track_uri)
+                queued_count += 1
+            
+            # Fetch the next page of results if available
+            if tracks_results['next']:
+                tracks_results = sp.next(tracks_results)
+                tracks_to_queue = tracks_results['items']
+            else:
+                tracks_to_queue = None
+
+        if queued_count > 0:
+            print(f"SUCCESS: Successfully queued {queued_count} tracks from the album '{album_name_found}'.")
+        else:
+             print(f"WARNING: Found album '{album_name_found}' but it contained no tracks to queue.")
+
+
+    except spotipy.SpotifyException as e:
+        if e.http_status == 404:
+            print("Error: No active device found. Please start the Spotify app on a device.")
+        else:
+            print(f"An error occurred while queueing tracks: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
+# =====================================================================
+# 3. MAIN EXECUTION LOOP (Modified menu text for clarity)
+# =====================================================================
+
+def get_input_details(prompt_message: str) -> Optional[tuple[str, str]]:
+    """Helper to get and parse song/artist or album/artist input."""
+    item = input(prompt_message)
+    details = item.split(" by ")
+    if len(details) != 2:
+        print("Please enter in the format: <name> by <artist name>")
+        return None
+    name = details[0].strip()
+    artist = details[1].strip()
+    return name, artist
     # --- 1. SPOTIFY API CREDENTIALS AND SCOPES ---
     # It is highly recommended to use environment variables for security
     CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID")
@@ -162,6 +392,173 @@ def play_spotify_song_by_name(song_name: str, singer_name: str):
         print(f"\nAn error occurred during API or launch: {e}")
         print("Ensure you have correctly set up the Authorization Code Flow.")
 
+def generate_content_with_retry(prompt: str, retries: int = 0):
+    """
+    Calls the Gemini API with Google Search grounding and exponential backoff.
+
+    Args:
+        prompt: The user's text prompt.
+        retries: The current retry attempt number.
+
+    Returns:
+        The parsed JSON response from the API.
+    
+    Raises:
+        Exception: If the request fails after all retry attempts.
+    """
+    API_KEY = os.getenv("GEMINI_API_KEY")
+    API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent"
+    MAX_RETRIES = 3
+    # 1. Define the system instructions and payload structure
+    system_prompt = "You are a friendly, helpful, and creative assistant. Answer the user's query in a conversational and easy-to-understand manner."
+    
+    payload = {
+        "contents": [
+            {"parts": [{"text": prompt}]}
+        ],
+        # Enable Google Search grounding for real-time information
+        "tools": [{"google_search": {}}],
+        "systemInstruction": {
+            "parts": [{"text": system_prompt}]
+        }
+    }
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    # 2. Add API key to the request parameters
+    params = {
+        "key": API_KEY
+    }
+
+    try:
+        print(f"\n--- Sending request (Attempt {retries + 1}/{MAX_RETRIES}) ---")
+        
+        # 3. Make the API call
+        response = requests.post(API_URL, headers=headers, params=params, data=json.dumps(payload))
+        response.raise_for_status() # Raises an exception for bad status codes (4xx or 5xx)
+        
+        return response.json()
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error during API call: {e}")
+        
+        if retries < MAX_RETRIES - 1:
+            delay = 2 ** retries  # 1s, 2s, 4s
+            print(f"Retrying in {delay} seconds...")
+            time.sleep(delay)
+            return generate_content_with_retry(prompt, retries + 1)
+        else:
+            raise Exception("Failed to connect to the AI service after multiple retries.")
+
+
+def display_response(response_json):
+    """
+    Parses the generated text and sources and returns them as a single formatted string.
+    """
+    result_output = ""
+    separator = "=" * 50
+    
+    candidate = response_json.get('candidates', [{}])[0]
+    
+    if not candidate:
+        return "\n[ERROR] No candidate response received from the API."
+
+    # Extract Text
+    text = candidate.get('content', {}).get('parts', [{}])[0].get('text', '')
+
+    if text:
+        result_output += text
+        result_output += "\n" # Ensure text ends with a newline
+    else:
+        result_output += "\n[INFO] Generated text was empty."
+        return result_output
+
+    # Extract Sources/Citations (Grounding Metadata)
+    grounding_metadata = candidate.get('groundingMetadata', {})
+    attributions = grounding_metadata.get('groundingAttributions', [])
+    
+    if attributions:
+        sources = []
+        for attr in attributions:
+            web_info = attr.get('web', {})
+            uri = web_info.get('uri')
+            title = web_info.get('title')
+            if uri and title:
+                sources.append((title, uri))
+        
+        if sources:
+            # Filter for unique URIs
+            unique_sources = {}
+            for title, uri in sources:
+                unique_sources[uri] = title
+
+            source_separator = "-" * 50
+            result_output += f"\n{source_separator}\n"
+            result_output += "Sources/Citations:\n"
+            result_output += f"{source_separator}\n"
+            
+            for i, (uri, title) in enumerate(unique_sources.items(), 1):
+                result_output += f"  {i}. {title} \n     URL: {uri}\n"
+    
+    return result_output
+
+# --- Helper function for Spotify voice input ---
+def get_spotify_details_from_voice():
+    """Prompts the user to speak the song/album name and artist and parses it."""
+    speak("Please tell me the name of the track or album along with the artist.")
+    speak("Say 'song name by artist name'.")
+    
+    # Give the user a moment to prepare
+    time.sleep(1) 
+    
+    details_query = take_command().lower()
+    print(f"Details said: {details_query}")
+
+    if "by" in details_query:
+        parts = details_query.split("by")
+        if len(parts) >= 2:
+            name = parts[0].strip()
+            artist = parts[1].strip()
+            return name, artist
+    
+    speak("Sorry, I could not clearly understand the song and artist name. Please try again.")
+    return None, None
+
+# --- Helper function for routing specific Spotify commands ---
+def spotify_command_router(query: str):
+    """Routes the Spotify command to the correct function based on the query."""
+
+    if 'skip' in query or 'next song' in query or 'next track' in query:
+        skip_to_next_song()
+    
+    elif 'queue album' in query or 'add album' in query:
+        speak("Which album would you like to queue?")
+        print("Which album would you like to queue?")
+        album_name, artist_name = get_spotify_details_from_voice()
+        if album_name and artist_name:
+            queue_spotify_album_by_name(album_name, artist_name)
+    
+    elif 'queue song' in query or 'queue track' in query or 'add song' in query:
+        speak("Which song would you like to queue?")
+        print("Which song would you like to queue?")
+        song_name, singer_name = get_spotify_details_from_voice()
+        if song_name and singer_name:
+            queue_spotify_track_by_name(song_name, singer_name)
+    
+    elif any(q in query for q in spotify_query):
+        # Default action: Play a song immediately
+        speak("What would you like to play?")
+        print("What would you like to play?")
+        song_name, singer_name = get_spotify_details_from_voice()
+        if song_name and singer_name:
+          play_spotify_song_by_name(song_name, singer_name)
+    
+    else:
+        speak("I heard a Spotify command, but I didn't recognize the specific action like play, skip, or queue.")
+        print("I heard a Spotify command, but I didn't recognize the specific action like play, skip, or queue.")
+
 # Main program loop
 if __name__ == "__main__":
   wish_me()
@@ -205,14 +602,16 @@ if __name__ == "__main__":
     elif "open github" in query:
       webbrowser.open("https://github.com/Dilpreet2004")
 
-    elif "switch to gemini" in query:
-      pass
-    
-    elif "switch to chatgpt" in query:
-      pass
-    
-    elif "switch to deepseek" in query:
-      pass
+    elif any(talk in query for talk in talk_query):
+      try:
+        response_json = generate_content_with_retry(query)
+        result = display_response(response_json)
+        print(result)
+        speak(result)
+        
+      except Exception as e:
+        print(f"\n[FATAL ERROR] Operation failed: {e}")
+        speak("Sorry, I am unable to process your request at the moment.")
     
     elif "send message to given number on whatsapp" in query:
       pass
@@ -306,13 +705,9 @@ if __name__ == "__main__":
         print(e)
         speak("Sorry my friend. I am not able to send this email")
     
-    elif "play song" in query or "play music" in query or "play spotify" in query or "play another song" in query:
-      speak("Which song would you like to play?")
-      song_name = take_command()
-      speak("Who is the singer?")
-      singer_name = take_command()
-      play_spotify_song_by_name(song_name, singer_name)
-    
+    elif any(q in query for q in spotify_query) or 'skip' in query or 'queue' in query or 'next song' in query or 'add' in query:
+      spotify_command_router(query)
+
     elif "shutdown system" in query:
       if platform.system() == "Windows":
         os.system("shutdown /s /t 5")
@@ -325,6 +720,6 @@ if __name__ == "__main__":
       os.system("shutdown /r /t 5")
       print("Restarting the system in 5 seconds.")
     
-    elif "quit" in query:
+    elif "quit" in query or "exit" in query:
       speak("Exiting the program. Goodbye!")
       break
