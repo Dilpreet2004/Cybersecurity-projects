@@ -15,6 +15,10 @@ import requests
 import json
 import time
 from typing import Optional
+import psutil
+import pywifi
+from pywifi import const
+import time
 load_dotenv()
 
 speaker = wincl.Dispatch("SAPI.SpVoice")
@@ -559,6 +563,115 @@ def spotify_command_router(query: str):
         speak("I heard a Spotify command, but I didn't recognize the specific action like play, skip, or queue.")
         print("I heard a Spotify command, but I didn't recognize the specific action like play, skip, or queue.")
 
+def get_security_name(network):
+    """
+    Determines the human-readable security name for a network profile
+    by mapping stable pywifi integer constants (AKM and Cipher types).
+    """
+    # Define standard mappings using integer constant values
+    AKM_MAP = {
+        const.AKM_TYPE_NONE: "Open",
+        const.AKM_TYPE_WPA: "WPA",
+        const.AKM_TYPE_WPAPSK: "WPA-PSK",
+        const.AKM_TYPE_WPA2: "WPA2",
+        const.AKM_TYPE_WPA2PSK: "WPA2-PSK",
+        # Adding WPA3 for completeness, though may not be in older pywifi versions
+        getattr(const, 'AKM_TYPE_WPA3PSK', 0x00000008): "WPA3-PSK", 
+        getattr(const, 'AKM_TYPE_WPA3', 0x00000004): "WPA3",
+    }
+    
+    CIPHER_MAP = {
+        const.CIPHER_TYPE_NONE: "None",
+        const.CIPHER_TYPE_WEP: "WEP",
+        const.CIPHER_TYPE_TKIP: "TKIP",
+        const.CIPHER_TYPE_CCMP: "CCMP/AES", 
+    }
+
+    # 1. Handle Open/WEP (Cipher-based security)
+    if not network.akm or const.AKM_TYPE_NONE in network.akm:
+        if network.cipher == const.CIPHER_TYPE_WEP:
+            return "WEP"
+        return "Open"
+
+    # 2. Handle WPA/WPA2/WPA3 (AKM-based security)
+    akm_protocols = []
+    for akm_int in network.akm:
+        akm_protocols.append(AKM_MAP.get(akm_int, f"Unknown AKM:{akm_int}"))
+        
+    # Join protocols (e.g., WPA/WPA2-PSK)
+    akm_str = "/".join(sorted(set(p.replace('-PSK', '') for p in akm_protocols if 'PSK' in p) or akm_protocols))
+    
+    # Extract Cipher (Encryption) type
+    cipher_str = CIPHER_MAP.get(network.cipher, f"Unknown Cipher:{network.cipher}")
+    
+    # Standard secured network format: Protocol/Cipher (e.g., WPA2-PSK/CCMP/AES)
+    return f"{akm_str}/{cipher_str}"
+
+
+def scan_wifi_networks():
+    """
+    Scans for and lists available Wi-Fi networks using the pywifi library.
+    """
+    try:
+        # 1. Initialize the Wi-Fi interface object
+        wifi = pywifi.PyWiFi()
+        
+        # Get the first Wi-Fi interface (usually wlan0 or similar)
+        ifaces = wifi.interfaces()
+        if not ifaces:
+            speak("No Wi-Fi interface found. Please ensure Wi-Fi is enabled.")
+            return
+
+        iface = ifaces[0]
+        
+        # 2. Start the network scan
+        speak("Starting Wi-Fi scan...")
+        iface.scan()
+        
+        # 3. Wait for the scan to complete (can take a few seconds)
+        time.sleep(4) 
+        
+        # 4. Retrieve the scan results
+        results = iface.scan_results()
+        
+        if not results:
+            speak("No networks found.")
+            return
+
+        # 5. Process and display the results
+        speak("Here are the results:")
+        print("\n" + "="*70)
+        print(f"{'Available Wi-Fi Networks':^70}")
+        print("="*70)
+        
+        # Use a set to store unique SSIDs to avoid duplicate listings from multiple BSSIDs/APs
+        unique_ssids = set()
+        
+        # Sort by signal strength (RSSI) in descending order
+        sorted_results = sorted(results, key=lambda x: x.signal, reverse=True)
+
+        for network in sorted_results:
+            ssid = network.ssid
+            
+            # Filter out hidden or already listed networks
+            if ssid and ssid not in unique_ssids:
+                
+                signal_strength = network.signal # Signal is in dBm (negative values)
+                
+                # Determine the security type using the robust helper function
+                security = get_security_name(network)
+                
+
+                print(f"SSID: {ssid:<35} | Signal: {signal_strength: >4} dBm | Security: {security}")
+                unique_ssids.add(ssid)
+
+        print("="*70)
+
+    except Exception as e:
+        print(f"\nAn error occurred: {e}")
+        print("This might be due to missing libraries or insufficient permissions.")
+        print("Please ensure you have installed 'pywifi' and run the script with administrator/root privileges if necessary.")
+
 # Main program loop
 if __name__ == "__main__":
   wish_me()
@@ -625,7 +738,7 @@ if __name__ == "__main__":
       pass
     
     elif "List available wifi networks" in query:
-      pass
+      scan_wifi_networks()
 
     elif "check internet speed" in query:
       pass
@@ -634,7 +747,11 @@ if __name__ == "__main__":
       pass
     
     elif "tell battery percentage" in query:
-      pass
+      battery = psutil.sensors_battery()
+      if battery:
+        speak(f"Battery percentage is {battery.percent} percent")
+      else:
+        speak("Battery information not available.")
 
     elif "scan for vulnerabilities" in query:
       pass
@@ -661,9 +778,6 @@ if __name__ == "__main__":
       pass
 
     elif "analyze security logs" in query:
-      pass
-
-    elif "tell me a joke" in query:
       pass
 
     elif "create a reminder" in query:
@@ -730,4 +844,4 @@ if __name__ == "__main__":
     
     elif "quit" in query or "exit" in query:
       speak("Exiting the program. Goodbye!")
-      break
+      exit(0)
