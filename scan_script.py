@@ -1,4 +1,5 @@
-import nmap # type: ignore
+import nmap
+import pandas as pd
 
 sc = nmap.PortScanner()
 
@@ -32,8 +33,13 @@ else:
             print("\nHost is up, below are the scan results: ")
             # Use .get() to safely access the protocol information
             if sc[ip_addr].get(proto):
+                ports_data = []
                 for port, info in sc[ip_addr][proto].items():
-                    print(f"\nPort:{port} \nService: {info['name']} \nState: {info['state']}")
+                    ports_data.append((port, info['name'], info['state']))
+                df = pd.DataFrame(ports_data, columns=['Port', 'Name', 'State'])
+                print(df)
+
+                    
             else:
                 print(f"No {proto.upper()} ports found for this host.")
         else:
