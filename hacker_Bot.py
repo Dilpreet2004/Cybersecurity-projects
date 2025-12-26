@@ -10,7 +10,7 @@ from email.mime.multipart import MIMEMultipart
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 import platform
-from dotenv import load_dotenv
+from dotenv import load_dotenv, set_key
 import requests
 import json
 import time
@@ -19,6 +19,10 @@ import psutil
 import pywifi
 from pywifi import const
 import time
+import nmap
+import pandas as pd
+from alive_progress import alive_bar
+from getpass import getpass
 load_dotenv()
 
 speaker = wincl.Dispatch("SAPI.SpVoice")
@@ -68,14 +72,23 @@ def sendEmail(to: str, subject: str, body: str):
         subject (str): The subject of the email.
         body (str): The plain text content of the email.
     """
-    SENDER_PASSWORD = "your_app_password"  # Replace with your 8-character Google App Password
-    if SENDER_PASSWORD == "your_app_password":
-        print("ERROR: Please replace 'your_app_password' with a valid 16-character Google App Password.")
-        return
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    DOTENV_PATH = os.path.join(SCRIPT_DIR, '.env')
+    email = os.environ.get("EMAIL")
+    password = os.environ.get("PASSWORD")
+
+    if email and password:
+      speak("Sending email")
+    else:
+      speak("Enter the credentials to send email for the first time.")
+      email = input("Enter your Gmail address: ").strip()
+      password = getpass("Enter your App Password (8-character): ").strip()
+      set_key(DOTENV_PATH, "EMAIL", email)
+      set_key(DOTENV_PATH, "PASSWORD", password)
 
     # 1. Create the email message object (MIMEMultipart is best practice)
     message = MIMEMultipart()
-    message['From'] = "your_email@gmail.com"
+    message['From'] = email
     message['To'] = to
     message['Subject'] = subject
     
@@ -90,10 +103,10 @@ def sendEmail(to: str, subject: str, body: str):
         with smtplib.SMTP('smtp.gmail.com', 587) as server:
             # server.ehlo() is redundant if using 'with' and starttls()
             server.starttls() 
-            server.login("your_email@gmail.com", "your_app_password")
+            server.login(email, password)
             
             # 3. Use message.as_string() to send the properly formatted MIME message
-            server.sendmail("your_email@gmail.com", to, message.as_string())
+            server.sendmail(email, to, message.as_string())
             print("Email sent successfully!")
 
     except smtplib.SMTPAuthenticationError:
@@ -101,7 +114,7 @@ def sendEmail(to: str, subject: str, body: str):
     except Exception as e:
         print(f"An error occurred: {e}")
 
-# Function to play a song on Spotify by name and singer using Spotify API
+# Function to initialize and return a Spotify client
 def get_spotify_client() -> Optional[spotipy.Spotify]:
     """Handles Spotify authorization and returns an authenticated Spotify client object."""
     CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "<CLIENT_ID>") # replace <CLIENT_ID> with your client ID
@@ -130,14 +143,11 @@ def get_spotify_client() -> Optional[spotipy.Spotify]:
         print("Ensure you have correctly set up the Authorization Code Flow.")
         return None
 
-# The original play_spotify_song_by_name function is kept unchanged
+# Function to play a Spotify song by name
 def play_spotify_song_by_name(song_name: str, singer_name: str):
-    # ... (function body remains unchanged) ...
     CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID")
     CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET")
-    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "<CLIENT_ID>") # replace <CLIENT_ID> with your client ID
-    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "<CLIENT_SECRET>") # replace <CLIENT_SECRET> with your client ID
-    REDIRECT_URI = "http://localhost:8080/callback" 
+    REDIRECT_URI = "http://localhost:8080/callback"
     SCOPE = "user-read-playback-state,user-modify-playback-state"
 
     if not (CLIENT_ID and CLIENT_SECRET):
@@ -193,10 +203,7 @@ def play_spotify_song_by_name(song_name: str, singer_name: str):
         print(f"\nAn error occurred during API or launch: {e}")
         print("Ensure you have correctly set up the Authorization Code Flow.")
 
-# =====================================================================
-# 2. NEW SPOTIFY CONTROL FUNCTIONS (skip_to_next_song and queue_spotify_track_by_name remain unchanged)
-# =====================================================================
-
+# Function to skip to the next song
 def skip_to_next_song():
     """Skips the currently playing track to the next one in the queue/playlist."""
     sp = get_spotify_client()
@@ -215,6 +222,7 @@ def skip_to_next_song():
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
+# Function to queue a Spotify track by name
 def queue_spotify_track_by_name(song_name: str, singer_name: str):
     """Searches for a track and adds it to the Spotify playback queue."""
     sp = get_spotify_client()
@@ -249,6 +257,7 @@ def queue_spotify_track_by_name(song_name: str, singer_name: str):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
+# Function to queue all tracks of a Spotify album by name
 def queue_spotify_album_by_name(album_name: str, singer_name: str):
     """
     Searches for an album and queues ALL of its tracks one by one.
@@ -311,11 +320,7 @@ def queue_spotify_album_by_name(album_name: str, singer_name: str):
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
-
-# =====================================================================
-# 3. MAIN EXECUTION LOOP (Modified menu text for clarity)
-# =====================================================================
-
+# Helper function to get input details
 def get_input_details(prompt_message: str) -> Optional[tuple[str, str]]:
     """Helper to get and parse song/artist or album/artist input."""
     item = input(prompt_message)
@@ -396,6 +401,7 @@ def get_input_details(prompt_message: str) -> Optional[tuple[str, str]]:
         print(f"\nAn error occurred during API or launch: {e}")
         print("Ensure you have correctly set up the Authorization Code Flow.")
 
+# Function to call Gemini API with retries
 def generate_content_with_retry(prompt: str, retries: int = 0):
     """
     Calls the Gemini API with Google Search grounding and exponential backoff.
@@ -437,8 +443,6 @@ def generate_content_with_retry(prompt: str, retries: int = 0):
     }
 
     try:
-        print(f"\n--- Sending request (Attempt {retries + 1}/{MAX_RETRIES}) ---")
-        
         # 3. Make the API call
         response = requests.post(API_URL, headers=headers, params=params, data=json.dumps(payload))
         response.raise_for_status() # Raises an exception for bad status codes (4xx or 5xx)
@@ -456,7 +460,7 @@ def generate_content_with_retry(prompt: str, retries: int = 0):
         else:
             raise Exception("Failed to connect to the AI service after multiple retries.")
 
-
+# Function to display the response from the Gemini API
 def display_response(response_json):
     """
     Parses the generated text and sources and returns them as a single formatted string.
@@ -508,7 +512,7 @@ def display_response(response_json):
     
     return result_output
 
-# --- Helper function for Spotify voice input ---
+# Helper function for Spotify voice input ---
 def get_spotify_details_from_voice():
     """Prompts the user to speak the song/album name and artist and parses it."""
     speak("Please tell me the name of the track or album along with the artist.")
@@ -530,7 +534,7 @@ def get_spotify_details_from_voice():
     speak("Sorry, I could not clearly understand the song and artist name. Please try again.")
     return None, None
 
-# --- Helper function for routing specific Spotify commands ---
+# Helper function for routing specific Spotify commands ---
 def spotify_command_router(query: str):
     """Routes the Spotify command to the correct function based on the query."""
 
@@ -563,6 +567,7 @@ def spotify_command_router(query: str):
         speak("I heard a Spotify command, but I didn't recognize the specific action like play, skip, or queue.")
         print("I heard a Spotify command, but I didn't recognize the specific action like play, skip, or queue.")
 
+# Function to get human-readable security name
 def get_security_name(network):
     """
     Determines the human-readable security name for a network profile
@@ -607,7 +612,7 @@ def get_security_name(network):
     # Standard secured network format: Protocol/Cipher (e.g., WPA2-PSK/CCMP/AES)
     return f"{akm_str}/{cipher_str}"
 
-
+# Function to scan Wi-Fi networks
 def scan_wifi_networks():
     """
     Scans for and lists available Wi-Fi networks using the pywifi library.
@@ -672,6 +677,58 @@ def scan_wifi_networks():
         print("This might be due to missing libraries or insufficient permissions.")
         print("Please ensure you have installed 'pywifi' and run the script with administrator/root privileges if necessary.")
 
+# Function to perform Nmap scan
+def nmap_scan():
+    sc = nmap.PortScanner()
+
+    print("Welcome to this simple Nmap Scanning Tool !!")
+    print("---------------------------------------------")
+
+    ip_addr = input("Please enter the IP Address to scan: ")
+
+    print("The entered IP Address is: ", ip_addr)
+
+    resp = input("""\nPlease Enter the type of scan you wish to perform: 
+                            1. SYN Scan
+                            2. UDP Scan
+                            3. Comprehensive Scan\n>""")
+
+    print("You have selected: ", resp)
+
+    resp_dict = {'1':['-sS -v -sV','tcp'],'2':['-sU -v -sV','udp'],'3':['-sS -v -p- -O -sC','tcp']}
+
+    if resp not in resp_dict.keys():
+        print("Please enter a valid Option")
+    else:
+        print("Nmap version: ", sc.nmap_version())
+        print("Scanning Target:", ip_addr)
+        print("Please wait, scanning in progress...")
+        with alive_bar(stats='') as bar:
+            sc.scan(ip_addr, "1-65535", resp_dict[resp][0])
+            proto = resp_dict[resp][1]
+            bar()
+
+        # Check if the specified host is in the scan results.
+        if sc.all_hosts() and ip_addr in sc.all_hosts():
+            host_state = sc[ip_addr].state()
+            if host_state == 'up':
+                print("\nHost is up, below are the scan results: ")
+                # Use .get() to safely access the protocol information
+                if sc[ip_addr].get(proto):
+                    ports_data = []
+                    for port, info in sc[ip_addr][proto].items():
+                        ports_data.append((port, info['name'], info['state']))
+                    df = pd.DataFrame(ports_data, columns=['Port', 'Name', 'State'])
+                    print(df)
+
+                        
+                else:
+                    print(f"No {proto.upper()} ports found for this host.")
+            else:
+                print(f"Host is {host_state}.")
+        else:
+            print("\nHost is down or could not be scanned.")
+
 # Main program loop
 if __name__ == "__main__":
   wish_me()
@@ -711,7 +768,7 @@ if __name__ == "__main__":
       codePath = "C:\\Users\\Hp\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"
       os.startfile(codePath)
     
-    elif "open hianime" in query:
+    elif "open anime" in query:
       webbrowser.open("https://hianimes.ro/")
 
     elif "open netflix" in query:
@@ -722,6 +779,19 @@ if __name__ == "__main__":
 
     elif "open github" in query:
       webbrowser.open("https://github.com/Dilpreet2004")
+
+    elif "scan wi-fi networks" in query:
+      scan_wifi_networks()
+    
+    elif "scan for services on network" in query or "scan the host" in query:
+      nmap_scan()
+
+    elif "battery" in query:
+      battery = psutil.sensors_battery()
+      if battery:
+        speak(f"Battery percentage is {battery.percent} percent")
+      else:
+        speak("Battery information not available.")
 
     elif any(talk in query for talk in talk_query):
       try:
@@ -734,26 +804,13 @@ if __name__ == "__main__":
         print(f"\n[FATAL ERROR] Operation failed: {e}")
         speak("Sorry, I am unable to process your request at the moment.")
     
-    elif "send message to given number on whatsapp" in query:
+    elif "send message on whatsapp" in query:
       pass
-    
-    elif "List available wifi networks" in query:
-      scan_wifi_networks()
 
     elif "check internet speed" in query:
       pass
 
     elif "download youtube video" in query:
-      pass
-    
-    elif "tell battery percentage" in query:
-      battery = psutil.sensors_battery()
-      if battery:
-        speak(f"Battery percentage is {battery.percent} percent")
-      else:
-        speak("Battery information not available.")
-
-    elif "scan for vulnerabilities" in query:
       pass
 
     elif "perform penetration test" in query:
