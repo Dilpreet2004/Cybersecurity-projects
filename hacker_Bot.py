@@ -117,8 +117,8 @@ def sendEmail(to: str, subject: str, body: str):
 # Function to initialize and return a Spotify client
 def get_spotify_client() -> Optional[spotipy.Spotify]:
     """Handles Spotify authorization and returns an authenticated Spotify client object."""
-    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID", "<CLIENT_ID>") # replace <CLIENT_ID> with your client ID
-    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET", "<CLIENT_SECRET>") # replace <CLIENT_SECRET> with your client ID
+    CLIENT_ID = os.environ.get("SPOTIPY_CLIENT_ID")
+    CLIENT_SECRET = os.environ.get("SPOTIPY_CLIENT_SECRET")
     REDIRECT_URI = "http://localhost:8080/callback" # Must match your Spotify App settings
     
     # Scopes needed for playback control and queueing
