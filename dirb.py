@@ -43,6 +43,6 @@ except Exception as e:
 if dirb:
     print("\nFollowing directories found:")
     for directory in dirb:
-        print(directory)
+        print(f"/{directory}")
 else:
     print("\nNo directories found")
